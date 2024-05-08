@@ -1,0 +1,22 @@
+.main {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 80px 60px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.footerBox {
+    width: 100%;
+    position: absolute;
+    bottom: 0px;
+}
+
+.copyrightBox {
+    color: var(--text-color-white);
+    text-align: center;
+    margin-bottom: 20px;
+}

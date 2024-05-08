@@ -1,0 +1,9 @@
+.content {
+    padding: 120px 80px;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+.aboutBox {
+    margin-top: 100px;
+}

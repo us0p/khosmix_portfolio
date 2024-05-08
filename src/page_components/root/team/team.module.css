@@ -1,0 +1,11 @@
+.main {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    background-image: url("/team_background.png");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+}

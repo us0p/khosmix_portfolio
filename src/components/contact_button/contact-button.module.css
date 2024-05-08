@@ -1,0 +1,9 @@
+.contactButton {
+    text-decoration: none;
+    color: var(--text-color-dark);
+    background-color: var(--link-color-dark);
+    border-radius: 200px;
+    padding: 20px 60px;
+    line-height: 60px;
+    font-weight: bold;
+}

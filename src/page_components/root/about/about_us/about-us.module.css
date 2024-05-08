@@ -1,0 +1,14 @@
+.box {
+    width: 566px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.paragraph {
+    margin-bottom: 40px;
+    text-align: justify;
+}
+
+.h1 {
+    margin-bottom: 40px;
+}
