@@ -7,7 +7,7 @@ const WPP_URL = `https://wa.me/${PHONE_NUMBER}/?text=${CONTACT_TEXT}`
 export default function ContactButton() {
     return <a
         href={WPP_URL}
-        trel="noreferrer noopener"
+        rel="noreferrer noopener"
         target="_blank"
         className={`${styles.contactButton} ${oxanium.className}`}
     >
