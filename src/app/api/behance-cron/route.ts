@@ -28,7 +28,7 @@ export async function GET() {
             const projects: Project[] = []
             const requests: any[] = []
             articles.each((_, element) => {
-                requests.push(getProjectCover(element, projects, browser))
+                    requests.push(getProjectCover(element, projects, browser))
             })
             await Promise.all(requests)
             return NextResponse.json({ projects })
@@ -53,31 +53,37 @@ async function getProjectCover(element: cheerio.Element, projects: Project[], br
     })
 }
 
-// refactor this function:
-// it's not pulling all images from the project
-// it's not pulling video references
 async function getCompleteProject(projectUrl: string, browser: Browser): Promise<CompleteProjectItem[]> {
-    console.log("here")
     const page = await browser.newPage()
     try {
         const pageUrl = await page.goto(`https://www.behance.net${projectUrl}`)
         if (pageUrl) {
             const pageContent = await pageUrl.text()
             const html = cheerio.load(pageContent)
-            const sections = html("section")
+            const sections = html(".project-module")
             const completeProjects: CompleteProjectItem[] = []
             sections.each((_, element) => {
-                const imageContainer = cheerio("section > div > .project-module", element)
+                const imageContainer = cheerio(".project-module > div", element)
                 imageContainer.each((_, ele) => {
-                    const image = cheerio("img", ele)
-                    completeProjects.push({ src: image.attr().src, type: "image" })
+                    const imageAtt = cheerio("img", ele).attr()
+                    if (imageAtt) {
+                        completeProjects.push({ src: imageAtt["data-src"] || imageAtt.src, type: "image" })
+                        return
+                    }
+                    const videoAtt = cheerio("iframe", ele).attr()
+                    if (videoAtt) {
+                        completeProjects.push({ src: videoAtt.src, type: "video" })
+                    }
                 })
             })
+            page.close()
             return completeProjects
         }
+        page.close()
         return []
     } catch (error: any) {
-        console.log("error getting complete project", error.message)
+        console.log("error getting complete project", error)
+        page.close()
         return []
     }
 }
