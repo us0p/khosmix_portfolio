@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import puppeteer, { Browser } from "puppeteer"
 import cheerio from "cheerio"
 import Database, { Category, Project } from "@/utils/database";
 import { ObjectId, WithId } from "mongodb";
+import chromium from "chrome-aws-lambda"
+import puppeteer from "puppeteer-core";
+import { Browser } from "puppeteer-core";
 
 const behanceUrl = String(process.env.BEHANCE_URL)
 
@@ -25,13 +27,16 @@ type ProjectInfo = {
 
 export async function GET() {
     const db = new Database()
-    const browser = await puppeteer.launch()
+    const browser = await puppeteer.launch({
+        args: chromium.args,
+        executablePath: process.env.NODE_ENV !== "development" ? await chromium.executablePath : "/usr/bin/google-chrome-stable",
+        headless: true
+    })
     try {
         const projectCovers = await getProjectCovers(browser)
-        let categories = await db.getAllCategories()
         for (const projectCover of projectCovers) {
             const projectInfo = await getProjectInfoPage(projectCover.completeProjectHref, browser)
-            const categoriesIDs = await createUpdateProjectCategories(db, categories, projectInfo.categories)
+            const categoriesIDs = await createUpdateProjectCategories(db, projectInfo.categories)
             const dbProject = await createUpdateProject(db, projectCover, categoriesIDs, projectInfo)
             const arts = await getProjectArtsPage(projectCover.completeProjectHref, browser)
             await createUpdateProjectArts(db, arts, dbProject)
@@ -97,10 +102,10 @@ async function createUpdateProject(
 
 async function createUpdateProjectCategories(
     db: Database,
-    categories: WithId<Category>[],
     coverCategories: string[]
 ): Promise<ObjectId[]> {
     const projectCategories: ObjectId[] = []
+    let categories = await db.getAllCategories()
     for (const categoryName of coverCategories) {
         const dbCategory = categories.find((document) => document.name === categoryName)
         if (!dbCategory) {
