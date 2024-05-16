@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import cheerio from "cheerio"
-import Database, { Category, Project } from "@/utils/database";
+import Database, { Project } from "@/utils/database";
 import { ObjectId, WithId } from "mongodb";
 import chromium from "chrome-aws-lambda"
-import puppeteer from "puppeteer-core";
+import puppeteer from "chrome-aws-lambda"
 import { Browser } from "puppeteer-core";
 
 const behanceUrl = String(process.env.BEHANCE_URL)
@@ -27,7 +27,7 @@ type ProjectInfo = {
 
 export async function GET() {
     const db = new Database()
-    const browser = await puppeteer.launch({
+    const browser = await puppeteer.puppeteer.launch({
         args: chromium.args,
         executablePath: process.env.NODE_ENV !== "development" ? await chromium.executablePath : "/usr/bin/google-chrome-stable",
         headless: true
