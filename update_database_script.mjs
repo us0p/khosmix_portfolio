@@ -1,37 +1,82 @@
-import { NextResponse } from "next/server";
 import cheerio from "cheerio"
-import Database, { Project } from "@/utils/database";
-import { ObjectId, WithId } from "mongodb";
-import chromium from "chrome-aws-lambda"
-import puppeteer from "puppeteer-core"
-import { Browser } from "puppeteer-core";
+import puppeteer from "puppeteer"
+import dotenv from "dotenv"
+import path from "path";
+import { MongoClient } from "mongodb";
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local")})
 
 const behanceUrl = String(process.env.BEHANCE_URL)
 
-type ProjectArts = {
-    src: string
-    type: "image" | "video"
+class Database {
+    AVAILABLE_COLLECTIONS = {
+        PROJECT: "project",
+        PROJECT_ART: "project_art",
+        CATEGORY: "category",
+    }
+
+    constructor() {
+        this.client = new MongoClient(String(process.env.MONGO_CONNECTION_STR))
+        this.db = this.client.db(String(process.env.DB_NAME))
+    }
+
+    async getAllCategories() {
+        const categoryColl = this.db.collection(this.AVAILABLE_COLLECTIONS.CATEGORY)
+        const categoriesCursor = categoryColl.find()
+        const categories = await categoriesCursor.toArray()
+        return categories
+    }
+
+    async createCategory(category) {
+        const categoryColl = this.db.collection(this.AVAILABLE_COLLECTIONS.CATEGORY)
+        const result = await categoryColl.insertOne(category)
+        return result.insertedId
+    }
+
+    async getProjectBySrc(src){
+        const projectColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT)
+        const project = await projectColl.findOne({ src })
+        return project
+    }
+
+    async createProject(project) {
+        const projectColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT)
+        const result = await projectColl.insertOne(project)
+        return result.insertedId
+    }
+
+    async updateProject(projectID, newData) {
+        const projectColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT)
+        await projectColl.updateOne({ _id: projectID }, { $set: newData })
+    }
+
+    async getProjectArtByProjectID(projectID) {
+        const artColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT_ART)
+        const artCursor = artColl.find({ project_id: projectID })
+        const arts = await artCursor.toArray()
+        return arts
+    }
+
+    async createProjectArt(art) {
+        const artColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT_ART)
+        const result = await artColl.insertOne(art)
+        return result.insertedId
+    }
+
+    async updateProjectArt(projectArtID, newData) {
+        const artColl = this.db.collection(this.AVAILABLE_COLLECTIONS.PROJECT_ART)
+        await artColl.updateOne({ _id: projectArtID }, { $set: newData })
+    }
+
+    async disconnect() {
+        await this.client.close()
+    }
 }
 
-type ProjectCover = {
-    src: string
-    name: string
-    completeProjectHref: string
-}
+await main()
 
-type ProjectInfo = {
-    categories: string[]
-    description: string
-}
-
-
-export async function GET() {
+async function main() {
     const db = new Database()
-    const browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: process.env.NODE_ENV !== "development" ? await chromium.executablePath : "/usr/bin/google-chrome-stable",
-        headless: true
-    })
+    const browser = await puppeteer.launch()
     try {
         const projectCovers = await getProjectCovers(browser)
         for (const projectCover of projectCovers) {
@@ -41,23 +86,20 @@ export async function GET() {
             const arts = await getProjectArtsPage(projectCover.completeProjectHref, browser)
             await createUpdateProjectArts(db, arts, dbProject)
         }
-        return new NextResponse("OK", { status: 200 })
-    } catch (error: any) {
+        console.log("script executed successfully")
+    } catch (error) {
         console.log("error getting projects:", error)
-        const errorObj = {
-            error: error.message
-        }
-        return new NextResponse(JSON.stringify(errorObj), { status: 500 })
     } finally {
         await db.disconnect()
     }
+    process.exit()
 }
 
 async function createUpdateProjectArts(
-    db: Database,
-    arts: ProjectArts[],
-    dbProject: WithId<Project>
-): Promise<void> {
+    db,
+    arts,
+    dbProject
+) {
     for (const art of arts) {
         const projectArts = await db.getProjectArtByProjectID(dbProject["_id"])
         const dbArt = projectArts.find((document) => document.src === art.src)
@@ -78,11 +120,11 @@ async function createUpdateProjectArts(
 }
 
 async function createUpdateProject(
-    db: Database,
-    projectCover: ProjectCover,
-    categoriesIDs: ObjectId[],
-    projectInfo: ProjectInfo
-): Promise<WithId<Project>> {
+    db,
+    projectCover,
+    categoriesIDs,
+    projectInfo
+) {
     let dbProject = await db.getProjectBySrc(projectCover.src)
     const project = {
         src: projectCover.src,
@@ -97,14 +139,14 @@ async function createUpdateProject(
         await db.updateProject(dbProject["_id"], project)
         dbProject = await db.getProjectBySrc(projectCover.src)
     }
-    return dbProject!
+    return dbProject
 }
 
 async function createUpdateProjectCategories(
-    db: Database,
-    coverCategories: string[]
-): Promise<ObjectId[]> {
-    const projectCategories: ObjectId[] = []
+    db,
+    coverCategories
+) {
+    const projectCategories = []
     let categories = await db.getAllCategories()
     for (const categoryName of coverCategories) {
         const dbCategory = categories.find((document) => document.name === categoryName)
@@ -118,7 +160,7 @@ async function createUpdateProjectCategories(
     return projectCategories
 }
 
-async function getProjectCovers(browser: Browser): Promise<ProjectCover[]> {
+async function getProjectCovers(browser) {
     const page = await browser.newPage()
     try {
         const pageUrl = await page.goto(behanceUrl)
@@ -126,14 +168,14 @@ async function getProjectCovers(browser: Browser): Promise<ProjectCover[]> {
             const pageContent = await pageUrl.text()
             const html = cheerio.load(pageContent)
             const articles = html("article")
-            const requests: any[] = []
+            const requests = []
             articles.each((_, element) => {
                 requests.push(getElementAttributes(element))
             })
             return await Promise.all(requests)
         }
         return []
-    } catch (error: any) {
+    } catch (error) {
         console.log("error getting projects:", error)
         return []
     } finally {
@@ -141,7 +183,7 @@ async function getProjectCovers(browser: Browser): Promise<ProjectCover[]> {
     }
 }
 
-async function getElementAttributes(element: cheerio.Element): Promise<ProjectCover> {
+async function getElementAttributes(element) {
     const projectCover = cheerio("img", element).attr()
     const completeProject = cheerio("article > div > div > div > div > a", element).attr()
     return ({
@@ -151,7 +193,7 @@ async function getElementAttributes(element: cheerio.Element): Promise<ProjectCo
     })
 }
 
-async function getProjectArtsPage(projectUrl: string, browser: Browser): Promise<ProjectArts[]> {
+async function getProjectArtsPage(projectUrl, browser) {
     const page = await browser.newPage()
     try {
         const pageUrl = await page.goto(`https://www.behance.net${projectUrl}`)
@@ -159,7 +201,7 @@ async function getProjectArtsPage(projectUrl: string, browser: Browser): Promise
             const pageContent = await pageUrl.text()
             const html = cheerio.load(pageContent)
             const sections = html(".project-module")
-            const completeProjects: ProjectArts[] = []
+            const completeProjects = []
             sections.each((_, element) => {
                 const imageContainer = cheerio(".project-module > div", element)
                 imageContainer.each((_, ele) => {
@@ -178,7 +220,7 @@ async function getProjectArtsPage(projectUrl: string, browser: Browser): Promise
             return completeProjects
         }
         return []
-    } catch (error: any) {
+    } catch (error) {
         console.log("error getting complete project", error)
         return []
     } finally {
@@ -186,7 +228,7 @@ async function getProjectArtsPage(projectUrl: string, browser: Browser): Promise
     }
 }
 
-async function getProjectInfoPage(projectUrl: string, browser: Browser): Promise<ProjectInfo> {
+async function getProjectInfoPage(projectUrl, browser) {
     const page = await browser.newPage()
     try {
         const pageUrl = await page.goto(`https://www.behance.net${projectUrl}`)
